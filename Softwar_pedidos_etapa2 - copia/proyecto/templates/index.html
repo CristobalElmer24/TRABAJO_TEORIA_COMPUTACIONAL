@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Analizador de pedidos – Teoría de Computación</title>
+<style>
+:root{--bg:#f4f6fa;--card:#fff;--tx:#1d2433;--mut:#5b6578;--ok:#1b8a4b;--okbg:#e4f6ec;--er:#c0392b;--erbg:#fdeceb;--pri:#1f4e9c;--bd:#d9dfea}
+*{box-sizing:border-box}body{margin:0;font-family:Segoe UI,Arial,sans-serif;background:var(--bg);color:var(--tx)}
+header{background:var(--pri);color:#fff;padding:14px 28px}header h1{margin:0;font-size:20px}header p{margin:2px 0 0;font-size:13px;opacity:.85}
+main{max-width:1100px;margin:18px auto;padding:0 16px;display:grid;grid-template-columns:1fr 1fr;gap:16px}
+.card{background:var(--card);border:1px solid var(--bd);border-radius:10px;padding:16px}
+.card h2{margin:0 0 10px;font-size:15px;color:var(--pri)}.full{grid-column:1/3}
+textarea{width:100%;height:96px;font:14px Consolas,monospace;padding:8px;border:1px solid var(--bd);border-radius:6px}
+button{background:var(--pri);color:#fff;border:0;border-radius:6px;padding:8px 14px;font-size:13px;cursor:pointer;margin:6px 6px 0 0}
+button.sec{background:#e8edf6;color:var(--pri)}
+.chip{display:inline-block;background:#e8edf6;border-radius:12px;padding:3px 9px;font:12px Consolas,monospace;margin:3px;cursor:pointer}
+.estado{padding:10px 12px;border-radius:8px;font-weight:600;margin-bottom:8px}.estado.ok{background:var(--okbg);color:var(--ok)}.estado.er{background:var(--erbg);color:var(--er)}
+table{border-collapse:collapse;width:100%;font-size:12.5px}th,td{border:1px solid var(--bd);padding:4px 7px;text-align:left}th{background:#eef2f9}
+td.m{font-family:Consolas,monospace}.tree ul{list-style:none;margin:0;padding-left:20px;border-left:1px dashed #b8c2d6}.tree li{margin:2px 0;font:13px Consolas,monospace}
+.nt{color:var(--pri);font-weight:700}.tk{color:#8a4b00}.lx{color:var(--ok);font-weight:700}
+.sel{margin-bottom:6px;padding:6px 8px;border:1px solid var(--bd);border-radius:6px;cursor:pointer;font:13px Consolas,monospace}.sel.on{border-color:var(--pri);background:#eef3fc}
+.tabs button{background:#e8edf6;color:var(--pri);margin:0 4px 6px 0}.tabs button.on{background:var(--pri);color:#fff}
+.g-wrap{overflow:auto;border:1px solid var(--bd);border-radius:8px;padding:6px;background:#fff}
+.g-nodo{fill:#fff;stroke:#1f4e9c;stroke-width:1.6}.g-fin{fill:none}.g-linea{stroke:#44506b;stroke-width:1.3;fill:none}.g-flecha{fill:#44506b}
+.g-etq{fill:#8a2d00;font-weight:700;paint-order:stroke;stroke:#fff;stroke-width:3px}.g-q{fill:#1d2433;font-size:11px}
+pre.q{background:#f4f6fa;border:1px solid var(--bd);border-radius:6px;padding:10px;font:13px Consolas,monospace;white-space:pre-wrap}
+</style></head>
+<body>
+<header><h1>Analizador léxico y sintáctico de pedidos</h1>
+<p>Restaurante con atención en mesa, para llevar y delivery · Formato: PED-NNN-UBICACIÓN-ÍTEM(+ÍTEM)*</p></header>
+<main>
+ <section class="card"><h2>1. Ingreso del pedido</h2>
+  <textarea id="txt" placeholder="Un pedido por línea">PED-045-M12-C03
+PED-102-D-B02+S01
+PED-045-X12-C03</textarea>
+  <div><button onclick="analizar()">Analizar</button><button class="sec" onclick="document.getElementById('f').click()">Subir archivo .txt</button>
+  <button class="sec" onclick="document.getElementById('txt').value=''">Limpiar</button>
+  <input type="file" id="f" accept=".txt" hidden onchange="subir(this)"></div>
+  <p style="font-size:12px;color:var(--mut);margin:10px 0 2px">Ejemplos:</p>
+  <span class="chip" onclick="ej('PED-007-L-C01+B02+S03')">PED-007-L-C01+B02+S03</span>
+  <span class="chip" onclick="ej('PED45-M12-C03')">PED45-M12-C03</span>
+  <span class="chip" onclick="ej('PED-045-M12-')">PED-045-M12-</span>
+ </section>
+ <section class="card"><h2>2. Resultados por pedido</h2><div id="lista"></div></section>
+ <section class="card"><h2>3. Tokens y lexemas</h2><div id="tokens"></div></section>
+ <section class="card"><h2>4. Pedido estructurado</h2><div id="est"></div></section>
+ <section class="card"><h2>5. Árbol sintáctico</h2><div id="arbol" class="tree"></div></section>
+ <section class="card"><h2>6. Traza del análisis LR</h2><div id="traza" style="max-height:300px;overflow:auto"></div></section>
+ <section class="card full"><h2>7. Etapa 2 – Expresión regular, AFND, AFD, tabla, transiciones y quíntupla</h2>
+  <p style="font-size:12px;color:var(--mut);margin:0 0 6px">Lexemas del pedido seleccionado (clic en uno para ver su autómata):</p>
+  <div id="lexemas"></div>
+  <p style="font-size:12px;color:var(--mut);margin:10px 0 4px">Token / lenguaje:</p>
+  <div id="selTok" class="tabs"></div>
+  <div id="selTab" class="tabs"></div>
+  <div id="aut"></div>
+ </section>
+</main>
+<script>
+let R=[];
+function ej(s){const t=document.getElementById('txt');t.value=(t.value?t.value+'\n':'')+s}
+async function analizar(){const r=await fetch('/api/analizar',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({texto:document.getElementById('txt').value})});R=await r.json();pintar(0)}
+async function subir(i){const fd=new FormData();fd.append('archivo',i.files[0]);const r=await fetch('/api/archivo',{method:'POST',body:fd});R=await r.json();document.getElementById('txt').value=R.map(x=>x.entrada).join('\n');pintar(0)}
+function pintar(k){
+ document.getElementById('lista').innerHTML=R.map((x,i)=>`<div class="sel ${i==k?'on':''}" onclick="pintar(${i})">${x.valido?'✔':'✘'} ${x.entrada}</div>`).join('');
+ CUR=k;const x=R[k];pintarLex();if(!x)return;
+ document.getElementById('lista').innerHTML+=`<div class="estado ${x.valido?'ok':'er'}">${x.valido?'✔ ':'✘ '}${x.mensaje}</div>`;
+ document.getElementById('tokens').innerHTML=x.tokens.length?'<table><tr><th>#</th><th>Token</th><th>Lexema</th><th>Pos.</th></tr>'+x.tokens.map((t,i)=>`<tr><td>${i+1}</td><td>${t.token}</td><td class="m">${t.lexema}</td><td>${t.pos}</td></tr>`).join('')+'</table>':'<i>Sin tokens (error léxico)</i>';
+ const p=x.pedido;document.getElementById('est').innerHTML=p?`<table><tr><th>Correlativo</th><td>${p.correlativo}</td></tr><tr><th>Canal</th><td>${p.canal}</td></tr><tr><th>Ítems</th><td>${p.items.join(', ')}</td></tr><tr><th>Destino</th><td>Cocina</td></tr></table>`:'<i>Pedido rechazado: no se envía a cocina</i>';
+ document.getElementById('arbol').innerHTML=x.arbol?nodo(x.arbol,true):'<i>No hay árbol</i>';
+ document.getElementById('traza').innerHTML=x.traza.length?'<table><tr><th>Pila</th><th>Entrada</th><th>Acción</th></tr>'+x.traza.map(t=>`<tr><td class="m">${t.pila}</td><td class="m">${t.entrada}</td><td>${t.accion}</td></tr>`).join('')+'</table>':'<i>Sin traza</i>';
+}
+function nodo(n,raiz){if(n.lexema!==null&&!n.hijos.length)return `<li><span class="tk">${n.etq}</span> → <span class="lx">${n.lexema}</span></li>`;
+ const h=n.hijos.map(c=>nodo(c)).join('');const s=`<span class="nt">${n.etq}</span><ul>${h}</ul>`;return raiz?`<ul><li>${s}</li></ul>`:`<li>${s}</li>`}
+
+let AUT=[],TOK='T_ITEM',TAB='er',CUR=0;
+const TABS=[['er','ER'],['afnd','AFND'],['afd','AFD'],['tabla','TABLA'],['trans','TRANSICIONES'],['quin','QUÍNTUPLA']];
+async function cargarAut(){AUT=await (await fetch('/api/automatas')).json();pintarAut()}
+function pintarLex(){const x=R[CUR];const el=document.getElementById('lexemas');
+ if(!x||!x.tokens.length){el.innerHTML='<i>Analiza un pedido para ver sus lexemas</i>';return}
+ const vistos={};x.tokens.forEach(t=>vistos[t.lexema+'|'+t.token]=t);
+ el.innerHTML='<table><tr><th>Lexema</th><th>Token</th><th>Expresión regular</th></tr>'+Object.values(vistos).map(t=>{const a=AUT.find(z=>z.token==t.token);
+ return `<tr style="cursor:pointer" onclick="selTok('${t.token}')"><td class="m">${t.lexema}</td><td>${t.token}</td><td class="m">${a?esc(a.er):''}</td></tr>`}).join('')+'</table>'}
+function esc(s){return s.replace(/&/g,'&amp;').replace(/</g,'&lt;')}
+function selTok(t){TOK=t;pintarAut()}
+function selTab(t){TAB=t;pintarAut()}
+function tablaHTML(t){return '<div class="g-wrap"><table><tr><th>Estado</th>'+t.cols.map(c=>`<th>${esc(c)}</th>`).join('')+'</tr>'+t.filas.map(f=>`<tr><td class="m"><b>${f.estado}</b></td>`+f.celdas.map(c=>`<td class="m">${c}</td>`).join('')+'</tr>').join('')+'</table></div>'}
+function pintarAut(){
+ document.getElementById('selTok').innerHTML=AUT.map(a=>`<button class="${a.token==TOK?'on':''}" onclick="selTok('${a.token}')">${a.token=='LENGUAJE_COMPLETO'?'LENGUAJE COMPLETO':a.token}</button>`).join('');
+ document.getElementById('selTab').innerHTML=TABS.map(t=>`<button class="${t[0]==TAB?'on':''}" onclick="selTab('${t[0]}')">${t[1]}</button>`).join('');
+ const a=AUT.find(z=>z.token==TOK);const el=document.getElementById('aut');if(!a){el.innerHTML='';return}
+ let h='';
+ if(TAB=='er')h=`<p><b>${a.token}</b></p><pre class="q">${esc(a.er)}</pre>`;
+ if(TAB=='afnd')h=`<p>AFND con transiciones ε (Thompson): <b>${a.afnd.estados.length}</b> estados. Gráfico generado por código.</p><div class="g-wrap">${a.afnd.svg}</div>`;
+ if(TAB=='afd')h=`<p>AFD equivalente (subconjuntos): <b>${a.afd.estados.length}</b> estados. Estado final con doble círculo.</p><div class="g-wrap">${a.afd.svg}</div>`;
+ if(TAB=='tabla')h='<p>Tabla de transiciones del AFD (→ inicial, * final, — error):</p>'+tablaHTML(a.afd.tabla)+(a.afd.subconjuntos?'<p style="font-size:12px;color:var(--mut)">Subconjuntos: '+Object.entries(a.afd.subconjuntos).map(([k,v])=>k+'={'+v.join(',')+'}').join(' · ')+'</p>':'');
+ if(TAB=='trans')h='<p>Función de transición δ del AFD:</p><pre class="q">'+a.afd.transiciones.map(esc).join('\n')+'</pre>';
+ if(TAB=='quin')h='<p>Quíntupla del AFD  M = (Q, Σ, δ, q0, F)</p><pre class="q">'+a.afd.quintupla.map(r=>r[0]+' = '+esc(r[1])).join('\n')+'</pre><p>Quíntupla del AFND  N = (Q, Σ∪{ε}, δ, q0, F)</p><pre class="q">'+a.afnd.quintupla.map(r=>r[0]+' = '+esc(r[1])).join('\n')+'</pre>';
+ el.innerHTML=h}
+cargarAut().then(()=>{pintarLex()});analizar();
+</script></body></html>
